@@ -11,14 +11,15 @@ module Bosh::Spec
       @logger = logger
     end
 
-    def vms
-      vms_details.map do |vm_data|
+    def vms(deployment_name = '')
+      vms_details(deployment_name).map do |vm_data|
         Vm.new(
           @waiter,
           vm_data[:job_index],
           vm_data[:state],
           vm_data[:cid],
           vm_data[:agent_id],
+          vm_data[:ips],
           File.join(@agents_base_dir, "agent-base-dir-#{vm_data[:agent_id]}"),
           @director_nats_port,
           @logger,
@@ -55,11 +56,11 @@ module Bosh::Spec
       parse_table(@runner.run('vms --vitals'))
     end
 
-    def vms_details
-      parse_table(@runner.run('vms --details'))
-    end
-
     private
+
+    def vms_details(deployment_name)
+      parse_table(@runner.run("vms #{deployment_name} --details"))
+    end
 
     def parse_table(output)
       rows = []
