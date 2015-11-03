@@ -578,4 +578,53 @@ describe 'upload release', type: :integration do
       }
     end
   end
+
+  describe 'uploading release with --fix v2' do
+    it 'fixes packages in blobstore that are broken or missing' do
+      target_and_login
+
+      Dir.chdir(ClientSandbox.test_release_dir) do
+        bosh_runner.run_in_current_dir('create release')
+        bosh_runner.run_in_current_dir('upload release')
+      end
+
+      bosh_runner.run("upload stemcell #{spec_asset('valid_stemcell.tgz')}")
+
+      cloud_config_manifest = yaml_file('cloud_manifest', Bosh::Spec::Deployments.simple_cloud_config)
+      bosh_runner.run("update cloud-config #{cloud_config_manifest.path}")
+
+      deployment_manifest = yaml_file('deployment_manifest', Bosh::Spec::Deployments.simple_manifest)
+      bosh_runner.run("deployment #{deployment_manifest.path}")
+
+      expect(bosh_runner.run('deploy')).to match /Deployed.*to.*/
+
+      inspect1 = bosh_runner.run('inspect release test_release/1')
+      old_pkg_inspect = Bosh::Dev::TableParser.new(inspect1.split(/\n\n/)[1]).to_a
+
+      FileUtils.rm_rf(Dir.glob(File.join(current_sandbox.blobstore_storage_dir, "*")))
+
+
+
+      out = bosh_runner.run("upload release #{release_filename} --fix")
+
+      expect(out).to match /Started fixing package \'pkg_1.*Done/
+      expect(out).to match /Started fixing package \'pkg_2.*Done/
+      expect(out).to match /Started fixing package \'pkg_3_depends_on_2.*Done/
+      expect(out).to match /Started fixing package \'pkg_4_depends_on_3.*Done/
+      expect(out).to match /Started fixing package \'pkg_5_depends_on_4_and_1.*Done/
+
+      inspect2 = bosh_runner.run('inspect release test_release/1')
+      new_pkg_inspect = Bosh::Dev::TableParser.new(inspect2.split(/\n\n/)[1]).to_a
+
+      new_pkg_inspect.each { |new_pkg|
+        old_pkg_inspect.each { |old_pkg|
+          if new_pkg[:package] == old_pkg[:package]
+            expect(new_pkg[:blobstore_id]).to_not eq(old_pkg[:blobstore_id])
+            break
+          end
+        }
+      }
+    end
+  end
+
 end

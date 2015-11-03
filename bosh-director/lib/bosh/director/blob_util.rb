@@ -27,6 +27,10 @@ module Bosh::Director
       return create_blob path
     end
 
+    def self.delete_blob(blobstore_id)
+      blobstore.delete(blobstore_id) if blobstore.exists?(blobstore_id)
+    end
+
     def self.verify_blob(blobstore_id, sha1)
       blobstore.exists?(blobstore_id) && sha1 == Digest::SHA1.hexdigest(blobstore.get(blobstore_id))
     end
